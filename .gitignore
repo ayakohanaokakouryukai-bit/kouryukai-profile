@@ -3,3 +3,4 @@ node_modules/
 tools/.env
 .superpowers/
 .DS_Store
+gas/.clasp.json
