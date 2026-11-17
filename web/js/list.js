@@ -73,6 +73,7 @@ function buildShell() {
   listBox = el('div', { className: 'list' });
   noteEl = el('p', { className: 'notice', style: 'margin-bottom:12px', hidden: true });
   app.replaceChildren(
+    el('p', {}, el('a', { href: `me.html#t=${token}`, text: 'マイページへ' })),
     noteEl,
     el('div', { className: 'field' }, search),
     el('div', { className: 'chips' }, ...chips),

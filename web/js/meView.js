@@ -84,6 +84,14 @@ export function photoControl(token, profile) {
     el('label', { htmlFor: 'photo-input', text: '写真（任意）' }), holder, input, del, msg);
 }
 
+// Read-only photo for the profile view; uploading and deleting happen only on the edit screen.
+function photoDisplay(profile) {
+  const url = profile.photoUrl;
+  return el('div', { className: 'card-head', style: 'margin-bottom:12px' }, url
+    ? el('img', { className: 'avatar', src: url, alt: 'あなたの写真' })
+    : el('div', { className: 'avatar', 'aria-hidden': 'true', text: '👤' }));
+}
+
 function row(label, node) {
   return [el('dt', { text: label }), el('dd', {}, node)];
 }
@@ -105,7 +113,7 @@ export function profileView(profile, handlers) {
     ...(link ? row('Web・SNSのリンク', link) : []));
   return el('section', {},
     handlers.saved ? el('p', { className: 'notice', role: 'status', text: '保存しました' }) : null,
-    photoControl(handlers.token, p),
+    photoDisplay(p),
     dl,
     el('button', { type: 'button', className: 'btn', text: '編集する', onclick: handlers.onEdit }),
     el('p', {}, el('a', { href: `list.html#t=${handlers.token}`, text: '参加者一覧を見る' })),
