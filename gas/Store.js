@@ -74,13 +74,20 @@ function findRowByEmail_(t, email) {
 
 // Writes `obj` (header -> value) into the row for `email`, or appends one. Headers absent from obj
 // keep their current cell value. `textCols` cells are set to plain text before the values go in.
+// Live check (2026-11-18) showed that the '@' format alone does NOT stop setValues from storing
+// "=1+1" or "=A2" as a formula. A leading apostrophe forces Sheets to keep the string as literal
+// text; Sheets strips the apostrophe again when the value is read back.
+function asLiteral_(v) {
+  return typeof v === 'string' && /^[=+\-]/.test(v) ? "'" + v : v;
+}
+
 function writeRow_(sheet, t, existing, obj, textCols) {
   var n = existing ? existing.n : sheet.getLastRow() + 1;
   var out = [];
   for (var c = 0; c < t.headers.length; c++) {
     var h = t.headers[c];
-    if (h in obj) out.push(obj[h]);
-    else out.push(existing && existing.v[c] != null ? existing.v[c] : '');
+    var v = h in obj ? obj[h] : (existing && existing.v[c] != null ? existing.v[c] : '');
+    out.push(textCols.indexOf(h) >= 0 ? asLiteral_(v) : v);
     if (h in obj && textCols.indexOf(h) >= 0) sheet.getRange(n, c + 1, 1, 1).setNumberFormat('@');
   }
   sheet.getRange(n, 1, 1, out.length).setValues([out]);

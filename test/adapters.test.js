@@ -126,7 +126,10 @@ test('profile rows: read conversions and write (fields join, booleans, staff pre
   r.consent = false;
   s.upsertProfileRow(r);
   const row = profiles.values[1];
-  assert.equal(row[1], '=HYPERLINK("x")');
+  // Written with a leading apostrophe so real Sheets stores literal text (it strips the
+  // apostrophe on read). The '@' format alone was shown live not to prevent evaluation.
+  assert.equal(row[1], '\'=HYPERLINK("x")');
+  assert.equal(row[4], 'c');
   assert.equal(profiles.formats.get('2,2'), '@');
   assert.equal(profiles.formats.get('2,3'), '@');
   assert.equal(row[3], '飲食');
