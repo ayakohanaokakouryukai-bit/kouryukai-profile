@@ -180,6 +180,10 @@ function makeStore_(config) {
         issuedAt: toStr_(row.issuedAt), lastSentDate: toStr_(row.lastSentDate), pending: row.pending === true,
       }, TOKEN_TEXT_COLS_);
     },
+    listTokenRows: function () {
+      var d = tokens();
+      return d.t.rows.map(function (r) { return tokenRowFrom_(d.t, r); });
+    },
     listPendingTokenRows: function () {
       var d = tokens();
       return d.t.rows.map(function (r) { return tokenRowFrom_(d.t, r); }).filter(function (r) { return r.pending; });

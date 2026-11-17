@@ -19,6 +19,8 @@ export function makeDeps(overrides = {}) {
     saved: [],
     invalidations: 0,
     cachedList: null,
+    cachedAuth: null,
+    sheetReads: 0,
     gen: 'g0',
     puts: 0,
     alertSent: false,
@@ -32,20 +34,21 @@ export function makeDeps(overrides = {}) {
     newToken: () => 'tok' + String(++tokenCounter).padStart(3, '0'),
     withLock: (fn) => (state.busy ? { ok: false, error: 'busy' } : fn()),
     store: {
-      readApplicants: () => clone(state.applicants),
+      readApplicants: () => { state.sheetReads++; return clone(state.applicants); },
+      listTokenRows: () => { state.sheetReads++; return clone(state.tokens); },
       getTokenRowByEmail: (e) => clone(state.tokens.find((r) => r.email === e) || null),
-      getTokenRowByToken: (t) => clone(state.tokens.find((r) => r.token && r.token === t) || null),
+      getTokenRowByToken: (t) => (state.sheetReads++, clone(state.tokens.find((r) => r.token && r.token === t) || null)),
       upsertTokenRow: (row) => {
         const i = keyOf(state.tokens, row.email);
         if (i < 0) state.tokens.push(clone(row)); else state.tokens[i] = clone(row);
       },
       listPendingTokenRows: () => clone(state.tokens.filter((r) => r.pending)),
-      getProfileRow: (e) => clone(state.profiles.find((r) => r.email === e) || null),
+      getProfileRow: (e) => (state.sheetReads++, clone(state.profiles.find((r) => r.email === e) || null)),
       upsertProfileRow: (row) => {
         const i = keyOf(state.profiles, row.email);
         if (i < 0) state.profiles.push(clone(row)); else state.profiles[i] = clone(row);
       },
-      listProfileRows: () => clone(state.profiles),
+      listProfileRows: () => { state.sheetReads++; return clone(state.profiles); },
     },
     mail: {
       remaining: () => state.remaining,
@@ -59,7 +62,9 @@ export function makeDeps(overrides = {}) {
       getList: () => clone(state.cachedList),
       generation: () => state.gen,
       putList: (l, gen) => { if (gen !== state.gen) return; state.cachedList = clone(l); state.puts++; },
-      invalidate: () => { state.invalidations++; state.cachedList = null; state.gen = 'g' + state.invalidations; },
+      getAuth: () => clone(state.cachedAuth),
+      putAuth: (idx, gen) => { if (gen !== state.gen) return; state.cachedAuth = clone(idx); },
+      invalidate: () => { state.invalidations++; state.cachedList = null; state.cachedAuth = null; state.gen = 'g' + state.invalidations; },
     },
     alerts: {
       alreadySentToday: () => state.alertSent,
@@ -360,6 +365,7 @@ test('getList: stale putList after a concurrent withdraw+invalidate is rejected'
   withToken(d, 'b@example.com', 'T2');
   makeVisible(d, 'a@example.com', 'A');
   makeVisible(d, 'b@example.com', 'B');
+  run({ action: 'getMe', token: 'T1' }, d); // warm the auth index so the hook below hits the list build
   // A misses the cache and reads rows while B is still visible...
   const origList = d.store.listProfileRows;
   d.store.listProfileRows = () => {
@@ -632,4 +638,74 @@ test('processPending: blank token clears pending without sending; blank url is r
   assert.deepEqual(J(ctx.processPending(d)), { sent: 1, stillPending: 0 });
   assert.deepEqual(d.state.sent.map((m) => m.to), ['b@example.com']);
   assert.equal(d.state.tokens.find((t) => t.email === 'b@example.com').url, 'https://app.example.com/me.html#t=T2');
+});
+
+// ---- auth index cache (burst protection)
+
+test('auth index: repeated getList reads no sheets once the index and list are cached', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  run({ action: 'getList', token: 'T1' }, d);
+  const before = d.state.sheetReads;
+  for (let i = 0; i < 5; i++) assert.equal(run({ action: 'getList', token: 'T1' }, d).ok, true);
+  assert.equal(d.state.sheetReads, before);
+});
+
+test('auth index: a cancellation takes effect after invalidate (applyCancellationsNow), not before', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  assert.equal(run({ action: 'getList', token: 'T1' }, d).ok, true);
+  d.state.applicants[0].canceled = true;
+  assert.equal(run({ action: 'getList', token: 'T1' }, d).ok, true); // stale by design (up to TTL)
+  d.cache.invalidate();
+  assert.deepEqual(run({ action: 'getList', token: 'T1' }, d), { ok: false, error: 'invalid_token' });
+  assert.deepEqual(run({ action: 'getMe', token: 'T1' }, d), { ok: false, error: 'invalid_token' });
+});
+
+test('auth index: an index that says "no" is re-checked, so a reinstated applicant gets in at once', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  d.state.applicants[0].canceled = true;
+  assert.equal(run({ action: 'getMe', token: 'T1' }, d).ok, false); // index built with a canceled
+  d.state.applicants[0].canceled = false; // organizer clears the mark; index is still stale
+  assert.equal(run({ action: 'getMe', token: 'T1' }, d).ok, true);
+  assert.equal(run({ action: 'getList', token: 'T1' }, d).ok, true);
+});
+
+test('auth index: a token issued by requestLink works immediately', () => {
+  const d = makeDeps();
+  makeVisible(d, 'b@example.com', 'B');
+  withToken(d, 'b@example.com', 'T2');
+  run({ action: 'getList', token: 'T2' }, d); // index now cached without a's token
+  run({ action: 'requestLink', email: 'a@example.com' }, d);
+  const tok = d.state.tokens.find((r) => r.email === 'a@example.com').token;
+  assert.equal(run({ action: 'getMe', token: tok }, d).ok, true);
+});
+
+test('auth index: withdrawConsent makes getList not_visible immediately', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  assert.equal(run({ action: 'getList', token: 'T1' }, d).ok, true);
+  run({ action: 'withdrawConsent', token: 'T1' }, d);
+  assert.deepEqual(run({ action: 'getList', token: 'T1' }, d), { ok: false, error: 'not_visible' });
+});
+
+test('auth index: unknown tokens are refused and never expose the index', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  run({ action: 'getList', token: 'T1' }, d);
+  for (const t of ['nope', '__proto__', 'constructor', 'toString']) {
+    assert.deepEqual(run({ action: 'getList', token: t }, d), { ok: false, error: 'invalid_token' });
+  }
+  const me = run({ action: 'getMe', token: 'T1' }, d);
+  assert.equal('idx' in me, false);
+});
+
+test('auth index: a build racing with an invalidate is not cached', () => {
+  const d = withToken(makeDeps());
+  makeVisible(d, 'a@example.com', 'A');
+  const orig = d.store.listProfileRows;
+  d.store.listProfileRows = () => { const rows = orig(); d.store.listProfileRows = orig; d.cache.invalidate(); return rows; };
+  run({ action: 'getMe', token: 'T1' }, d);
+  assert.equal(d.state.cachedAuth, null);
 });

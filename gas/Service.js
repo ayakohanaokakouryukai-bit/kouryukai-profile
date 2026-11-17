@@ -26,14 +26,49 @@ function fail_(error) {
   return { ok: false, error: error };
 }
 
-// token -> row -> still eligible -> not expired. Returns {ok:true, email} or an error response.
+// One read of the three sheets, kept in the cache for a few minutes so a burst of requests does not
+// open the spreadsheets on every call. t: token -> email, a: eligible emails, v: visible emails.
+function buildAuthIndex_(deps) {
+  var idx = { t: {}, a: {}, v: {} };
+  deps.store.listTokenRows().forEach(function (r) {
+    if (r.token) idx.t[r.token] = normalizeEmail(r.email);
+  });
+  var applicants = deps.store.readApplicants();
+  applicants.forEach(function (x) {
+    if (isEligible(applicants, x.email)) idx.a[normalizeEmail(x.email)] = 1;
+  });
+  deps.store.listProfileRows().forEach(function (r) {
+    if (isVisible(r)) idx.v[normalizeEmail(r.email)] = 1;
+  });
+  return idx;
+}
+
+function authIndex_(deps) {
+  var idx = deps.cache.getAuth();
+  if (idx) return idx;
+  var gen = deps.cache.generation(); // read BEFORE building, as for the list
+  idx = buildAuthIndex_(deps);
+  deps.cache.putAuth(idx, gen);
+  return idx;
+}
+
+// token -> row -> still eligible -> not expired. Returns {ok:true, email, idx} or an error response.
+// Fast path: the cached index says yes. A cancellation therefore takes effect within AUTH_CACHE_TTL_
+// (or at once via applyCancellationsNow). Any "no" from the index is re-checked against the sheets,
+// so a new token or a newly added applicant is never refused because of a stale index.
 function authorize_(token, deps) {
   if (typeof token !== 'string' || token.trim() === '') return fail_('invalid_token');
+  var idx = authIndex_(deps);
+  var cachedEmail = Object.prototype.hasOwnProperty.call(idx.t, token) ? idx.t[token] : '';
+  if (cachedEmail && idx.a[cachedEmail] === 1) {
+    if (isExpired(deps.now(), deps.config.expiresAt)) return fail_('expired');
+    return { ok: true, email: cachedEmail, idx: idx };
+  }
   var row = deps.store.getTokenRowByToken(token);
   if (!row) return fail_('invalid_token');
   if (!isEligible(deps.store.readApplicants(), row.email)) return fail_('invalid_token');
   if (isExpired(deps.now(), deps.config.expiresAt)) return fail_('expired');
-  return { ok: true, email: normalizeEmail(row.email) };
+  return { ok: true, email: normalizeEmail(row.email), idx: null };
 }
 
 // The URL is built at send time so a changed APP_BASE_URL takes effect; row.url is refreshed to match.
@@ -72,6 +107,7 @@ function requestLinkWork_(req, deps) {
     row.url = deps.config.appBaseUrl + '/me.html#t=' + row.token;
     row.issuedAt = now.toISOString();
     deps.store.upsertTokenRow(row); // persist the token before any mail carries it
+    deps.cache.invalidate(); // the auth index must learn the new token
   }
   if (canSendToday(row.lastSentDate, now)) {
     if (deps.mail.remaining() > 0) {
@@ -186,7 +222,8 @@ function withdrawConsent_(req, deps) {
 function getList_(req, deps) {
   var auth = authorize_(req.token, deps);
   if (!auth.ok) return auth;
-  if (!isVisible(deps.store.getProfileRow(auth.email))) return fail_('not_visible');
+  var visible = auth.idx && auth.idx.v[auth.email] === 1;
+  if (!visible && !isVisible(deps.store.getProfileRow(auth.email))) return fail_('not_visible');
   var list = deps.cache.getList();
   if (!list) {
     var gen = deps.cache.generation(); // read BEFORE building: a concurrent invalidate makes putList a no-op

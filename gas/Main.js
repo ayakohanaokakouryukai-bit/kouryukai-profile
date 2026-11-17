@@ -45,6 +45,12 @@ function processPendingTrigger() {
   }
 }
 
+// Run from the editor after marking someone in the キャンセル column, to apply it immediately
+// instead of within AUTH_CACHE_TTL_ (5 minutes). Also drops the cached participant list.
+function applyCancellationsNow() {
+  makeCache_().invalidate();
+}
+
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'processPendingTrigger') ScriptApp.deleteTrigger(t);

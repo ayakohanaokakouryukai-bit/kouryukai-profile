@@ -210,6 +210,25 @@ test('cache adapter: putList is rejected when the generation changed (invalidate
   assert.deepEqual(J(c.getList()), [{ name: 'fresh' }]);
 });
 
+test('cache adapter: auth index roundtrip with TTL 300, cleared by invalidate, generation-guarded', () => {
+  const cache = fakeCache();
+  const ctx = loadGas({ CacheService: { getScriptCache: () => cache } });
+  const c = ctx.makeCache_();
+  assert.equal(c.getAuth(), null);
+  const idx = { t: { T1: 'a@x.com' }, a: { 'a@x.com': 1 }, v: {} };
+  c.putAuth(idx, c.generation());
+  assert.equal(cache.m.ttl, 300);
+  assert.deepEqual(J(c.getAuth()), idx);
+  c.putList([{ name: 'L' }], c.generation());
+  c.invalidate();
+  assert.equal(c.getAuth(), null);
+  assert.equal(c.getList(), null);
+  const g = c.generation();
+  c.invalidate();
+  c.putAuth(idx, g);
+  assert.equal(c.getAuth(), null);
+});
+
 // ---- lock
 function lockCtx(got) {
   const log = [];

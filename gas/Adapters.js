@@ -46,10 +46,13 @@ function makePhoto_(config, now) {
 }
 
 var LIST_CACHE_TTL_ = 600;
+var AUTH_CACHE_TTL_ = 300; // an organizer's キャンセル mark takes effect within this many seconds
 var LIST_GEN_TTL_ = 21600; // CacheService maximum
 
-// A generation value guards against a stale rebuild: the caller reads generation() before building the
-// list, and putList only writes if invalidate() has not bumped the generation since.
+// Two cached values share one generation: the public list ('list') and the auth index ('auth':
+// token -> email, eligible emails, visible emails). A generation value guards against a stale rebuild:
+// the caller reads generation() before building, and put* only writes if invalidate() has not bumped
+// the generation since.
 function makeCache_() {
   var cache = CacheService.getScriptCache();
   function currentGen() {
@@ -59,37 +62,42 @@ function makeCache_() {
       return '0';
     }
   }
+  function getChunked(prefix) {
+    try {
+      var n = parseInt(cache.get(prefix + ':n'), 10);
+      if (!(n >= 1)) return null;
+      var parts = [];
+      for (var i = 0; i < n; i++) {
+        var p = cache.get(prefix + ':' + i);
+        if (p == null) return null;
+        parts.push(p);
+      }
+      return JSON.parse(joinFromCache(parts));
+    } catch (err) {
+      return null;
+    }
+  }
+  function putChunked(prefix, value, gen, ttl) {
+    try {
+      if (currentGen() !== gen) return;
+      var parts = splitForCache(JSON.stringify(value), CACHE_CHUNK_CHARS);
+      for (var i = 0; i < parts.length; i++) cache.put(prefix + ':' + i, parts[i], ttl);
+      cache.put(prefix + ':n', String(parts.length), ttl); // written last: readers see all chunks or none
+      if (currentGen() !== gen) cache.remove(prefix + ':n'); // invalidated while writing: drop it
+    } catch (err) {
+      console.warn('cache.put ' + prefix + ' failed: ' + (err && err.message)); // caching is best effort
+    }
+  }
   return {
     generation: currentGen,
-    getList: function () {
-      try {
-        var n = parseInt(cache.get('list:n'), 10);
-        if (!(n >= 1)) return null;
-        var parts = [];
-        for (var i = 0; i < n; i++) {
-          var p = cache.get('list:' + i);
-          if (p == null) return null;
-          parts.push(p);
-        }
-        return JSON.parse(joinFromCache(parts));
-      } catch (err) {
-        return null;
-      }
-    },
-    putList: function (list, gen) {
-      try {
-        if (currentGen() !== gen) return;
-        var parts = splitForCache(JSON.stringify(list), CACHE_CHUNK_CHARS);
-        for (var i = 0; i < parts.length; i++) cache.put('list:' + i, parts[i], LIST_CACHE_TTL_);
-        cache.put('list:n', String(parts.length), LIST_CACHE_TTL_); // written last: readers see all chunks or none
-        if (currentGen() !== gen) cache.remove('list:n'); // invalidated while writing: drop it
-      } catch (err) {
-        console.warn('cache.putList failed: ' + (err && err.message)); // caching is best effort
-      }
-    },
+    getList: function () { return getChunked('list'); },
+    putList: function (list, gen) { putChunked('list', list, gen, LIST_CACHE_TTL_); },
+    getAuth: function () { return getChunked('auth'); },
+    putAuth: function (idx, gen) { putChunked('auth', idx, gen, AUTH_CACHE_TTL_); },
     invalidate: function () {
       cache.put('list:gen', Date.now() + '-' + Math.random().toString(36).slice(2), LIST_GEN_TTL_);
       cache.remove('list:n');
+      cache.remove('auth:n');
     },
   };
 }
