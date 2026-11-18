@@ -1,6 +1,11 @@
 // Participant API. Mirrors gas/Service.js; all state lives in D1 and auth is checked on every request.
-import { normalizeEmail, validateProfile, isVisible, isExpired, toPublicProfile } from './rules.js';
-import { getApplicant, getTokenRowByToken, getProfile, upsertProfile, listVisibleProfiles } from './db.js';
+import { normalizeEmail, validateProfile, isVisible, isExpired, toPublicProfile, canSendToday } from './rules.js';
+import {
+  getApplicant, getTokenRowByToken, getTokenRowByEmail, getProfile, upsertProfile, listVisibleProfiles,
+  setConsentOff, replacePhoto, clearPhoto, createTokenIfAbsent, claimPending,
+} from './db.js';
+
+const MAX_PHOTO_BASE64_CHARS = 2000000;
 
 const fail_ = (error) => ({ ok: false, error });
 
@@ -54,11 +59,67 @@ async function saveProfile_(req, env, deps) {
 async function withdrawConsent_(req, env, deps) {
   const auth = await authorize(env, deps, req.token);
   if (!auth.ok) return auth;
-  const row = await getProfile(env.DB, auth.email);
-  if (row) {
-    row.consent = false;
-    row.updatedAt = deps.now().toISOString();
-    await upsertProfile(env.DB, row);
+  await setConsentOff(env.DB, auth.email, deps.now().toISOString());
+  return { ok: true };
+}
+
+function base64ToBytes_(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function uploadPhoto_(req, env, deps) {
+  const auth = await authorize(env, deps, req.token);
+  if (!auth.ok) return auth;
+  const b64 = req.base64;
+  if (req.mimeType !== 'image/jpeg' || typeof b64 !== 'string' || b64 === '') return fail_('bad_image');
+  // JPEG starts FF D8 FF, which is '/9j/' in base64.
+  if (b64.length > MAX_PHOTO_BASE64_CHARS || b64.indexOf('/9j/') !== 0) return fail_('bad_image');
+  let bytes;
+  try {
+    bytes = base64ToBytes_(b64);
+  } catch (e) {
+    return fail_('bad_image');
+  }
+  const id = deps.newId();
+  await replacePhoto(env.DB, auth.email, id, bytes, deps.now().toISOString());
+  return { ok: true, photoUrl: '/api/photo/' + id };
+}
+
+async function deletePhoto_(req, env, deps) {
+  const auth = await authorize(env, deps, req.token);
+  if (!auth.ok) return auth;
+  await clearPhoto(env.DB, auth.email, deps.now().toISOString());
+  return { ok: true };
+}
+
+async function requestLinkWork_(req, env, deps) {
+  const email = normalizeEmail(req.email);
+  const now = deps.now();
+  if (!email || isExpired(now, env.EXPIRES_AT)) return;
+  const applicant = await getApplicant(env.DB, email);
+  if (!applicant || applicant.canceled) return;
+  await createTokenIfAbsent(env.DB, { email, token: deps.newToken(), issuedAt: now.toISOString() });
+  const row = await getTokenRowByEmail(env.DB, email);
+  if (!row || row.pending || !canSendToday(row.lastSentDate, now)) return;
+  if (!(await claimPending(env.DB, email, now.toISOString()))) return;
+  const url = env.APP_BASE_URL + '/me.html#t=' + row.token;
+  let p;
+  try {
+    p = Promise.resolve(deps.sendMail({ email, url }));
+  } catch (err) {
+    p = Promise.reject(err);
+  }
+  deps.waitUntil(p.catch((err) => console.error('sendMail failed: ' + (err && err.message))));
+}
+
+async function requestLink_(req, env, deps) {
+  try {
+    await requestLinkWork_(req, env, deps);
+  } catch (err) {
+    console.error('requestLink failed: ' + (err && err.message));
   }
   return { ok: true };
 }
@@ -78,6 +139,9 @@ export async function handleApi(req, env, deps) {
       case 'getMe': return await getMe_(req, env, deps);
       case 'saveProfile': return await saveProfile_(req, env, deps);
       case 'withdrawConsent': return await withdrawConsent_(req, env, deps);
+      case 'uploadPhoto': return await uploadPhoto_(req, env, deps);
+      case 'deletePhoto': return await deletePhoto_(req, env, deps);
+      case 'requestLink': return await requestLink_(req, env, deps);
       case 'getList': return await getList_(req, env, deps);
       default: return fail_('server_error');
     }

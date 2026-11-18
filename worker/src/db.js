@@ -76,6 +76,64 @@ export async function upsertProfile(db, row) {
   ).run();
 }
 
+// Narrow writes: only the named columns change, so they cannot clobber a concurrent saveProfile.
+export async function setConsentOff(db, email, updatedAt) {
+  await db.prepare('UPDATE profiles SET consent = 0, updated_at = ? WHERE email = ?').bind(updatedAt, email).run();
+}
+
+// Stores the photo, points the profile at it (minimal row if none exists), and returns the previous photo id.
+// The old photo row is deleted after the profile points away; that delete is best effort.
+export async function replacePhoto(db, email, id, bytes, nowIso) {
+  const old = await db.prepare('SELECT photo_id FROM profiles WHERE email = ?').bind(email).first();
+  await db.prepare('INSERT INTO photos (id, data, created_at) VALUES (?, ?, ?)').bind(id, bytes.buffer, nowIso).run();
+  await db.prepare(
+    'INSERT INTO profiles (email, photo_id, updated_at) VALUES (?, ?, ?) ' +
+    'ON CONFLICT(email) DO UPDATE SET photo_id = excluded.photo_id, updated_at = excluded.updated_at'
+  ).bind(email, id, nowIso).run();
+  await deletePhotoRow_(db, old && old.photo_id);
+}
+
+export async function clearPhoto(db, email, nowIso) {
+  const old = await db.prepare('SELECT photo_id FROM profiles WHERE email = ?').bind(email).first();
+  if (!old || !old.photo_id) return;
+  await db.prepare("UPDATE profiles SET photo_id = '', updated_at = ? WHERE email = ?").bind(nowIso, email).run();
+  await deletePhotoRow_(db, old.photo_id);
+}
+
+async function deletePhotoRow_(db, id) {
+  if (!id) return;
+  try {
+    await db.prepare('DELETE FROM photos WHERE id = ?').bind(id).run();
+  } catch (err) {
+    console.error('photo delete failed: ' + (err && err.message));
+  }
+}
+
+export async function getPhotoData(db, id) {
+  const r = await db.prepare('SELECT data FROM photos WHERE id = ?').bind(id).first();
+  return r ? r.data : null;
+}
+
+export async function createTokenIfAbsent(db, row) {
+  await db.prepare(
+    'INSERT INTO tokens (email, token, issued_at) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING'
+  ).bind(row.email, row.token, row.issuedAt).run();
+}
+
+// Atomically marks pending; true only for the caller that flipped pending 0 -> 1.
+export async function claimPending(db, email, requestedAt) {
+  const r = await db.prepare(
+    'UPDATE tokens SET pending = 1, requested_at = ? WHERE email = ? AND pending = 0'
+  ).bind(requestedAt, email).run();
+  return r.meta.changes === 1;
+}
+
+export async function markSent(db, email, date) {
+  await db.prepare(
+    "UPDATE tokens SET pending = 0, requested_at = '', last_sent_date = ? WHERE email = ?"
+  ).bind(date, email).run();
+}
+
 export async function listVisibleProfiles(db) {
   const { results } = await db.prepare(
     'SELECT p.* FROM profiles p JOIN applicants a ON a.email = p.email ' +
