@@ -35,7 +35,7 @@ function showExpired() {
 function showNotVisible() {
   clearList(localStorage);
   show(el('p', { className: 'notice', text: '一覧を見るには、プロフィールを公開してください。' }),
-    el('p', {}, el('a', { href: `me.html#t=${token}`, text: 'マイページへ' })));
+    el('p', {}, el('a', { href: `me.html#t=${token}`, className: 'btn btn-link', text: 'マイページへ' })));
 }
 function showNetworkOnly() {
   show(el('p', { className: 'field-error', role: 'alert', text: '通信できませんでした。時間をおいて開き直してください。' }),
@@ -73,7 +73,7 @@ function buildShell() {
   listBox = el('div', { className: 'list' });
   noteEl = el('p', { className: 'notice', style: 'margin-bottom:12px', hidden: true });
   app.replaceChildren(
-    el('p', {}, el('a', { href: `me.html#t=${token}`, text: 'マイページへ' })),
+    el('p', {}, el('a', { href: `me.html#t=${token}`, className: 'btn btn-link', text: 'マイページへ' })),
     noteEl,
     el('div', { className: 'field' }, search),
     el('div', { className: 'chips' }, ...chips),

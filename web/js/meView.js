@@ -3,7 +3,7 @@ import { resizeToJpegBase64 } from './photo.js';
 import { formatJstDateLabel } from './dates.js';
 import { snsLinks } from './snsView.js';
 
-export const KEY_NOTICE = 'このページのURLは、あなた専用の合鍵です。人に教えないでください。';
+export const KEY_NOTICE = 'このページのURLはあなた専用です。人に教えないでください。';
 export const BAD_IMAGE = 'この画像は使えません。別の画像を選んでください。';
 
 export function el(tag, props = {}, ...children) {
@@ -118,7 +118,7 @@ export function profileView(profile, handlers) {
     photoDisplay(p),
     dl,
     el('button', { type: 'button', className: 'btn', text: '編集する', onclick: handlers.onEdit }),
-    el('p', {}, el('a', { href: `list.html#t=${handlers.token}`, text: '参加者一覧を見る' })),
+    el('p', {}, el('a', { href: `list.html#t=${handlers.token}`, className: 'btn btn-link', text: '参加者一覧を見る' })),
     el('p', { className: 'muted', text: KEY_NOTICE }),
     el('p', { className: 'muted', style: 'font-size:0.8rem' },
       el('a', { href: '#', text: '公開をやめる', onclick: (e) => { e.preventDefault(); handlers.onWithdraw(); } })));

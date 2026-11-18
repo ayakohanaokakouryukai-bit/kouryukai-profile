@@ -158,14 +158,17 @@ function showForm() {
     if (Object.keys(errs).length) return;
 
     submit.disabled = true;
-    submit.textContent = '保存中…';
+    submit.setAttribute('aria-busy', 'true');
+    submit.replaceChildren(el('span', { className: 'spinner', 'aria-hidden': 'true' }), document.createTextNode('保存中…'));
     const r = await callApi('saveProfile', { token, profile: v, consent: true }, { onRetry: () => setStatus('読み込み中…') });
     setStatus('');
     submit.disabled = false;
+    submit.removeAttribute('aria-busy');
     submit.textContent = '保存する';
     if (r && r.ok) {
       profile = { ...profile, ...(r.profile || v) };
       showProfile(true);
+      window.scrollTo(0, 0); // the saved view is shorter than the form; without this the screen looks blank
     } else if (r && r.error === 'validation') {
       showErrors(r.fieldErrors || {});
     } else if (r && r.error === 'consent_required') {

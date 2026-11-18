@@ -173,3 +173,20 @@ input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
 .sns-input { display: flex; align-items: center; gap: 6px; }
 .sns-at { font-weight: 700; color: var(--muted); }
 .sns-at-none { visibility: hidden; }
+
+/* link styled as a button (same shape as the main button, yellow so it differs from 編集する) */
+a.btn-link {
+  text-align: center; text-decoration: none; line-height: 28px;
+  color: var(--sun-text); background: var(--sun); box-shadow: 0 3px 0 #ba7517;
+}
+a.btn-link:active { box-shadow: 0 1px 0 #ba7517; }
+.btn + p { margin-top: 14px; }
+
+/* saving spinner inside a button */
+.spinner {
+  display: inline-block; width: 18px; height: 18px; margin-right: 8px; vertical-align: -3px;
+  border: 3px solid rgba(255, 255, 255, 0.45); border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
