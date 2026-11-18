@@ -4,3 +4,4 @@ tools/.env
 .superpowers/
 .DS_Store
 gas/.clasp.json
+gas-bridge/.clasp.json

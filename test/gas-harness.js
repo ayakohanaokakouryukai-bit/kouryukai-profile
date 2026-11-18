@@ -3,11 +3,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
-const GAS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'gas');
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Loads every gas/*.js file (sorted by filename) into one vm context and returns it.
+// Loads every <dir>/*.js file (default gas/) (sorted by filename) into one vm context and returns it.
 // `globals` injects fakes such as Utilities or ContentService.
-export function loadGas(globals = {}) {
+export function loadGas(globals = {}, dir = 'gas') {
+  const GAS_DIR = join(REPO_ROOT, dir);
   const ctx = createContext({ ...globals });
   const files = readdirSync(GAS_DIR)
     .filter((name) => name.endsWith('.js'))
