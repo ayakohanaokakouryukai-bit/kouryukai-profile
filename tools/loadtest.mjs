@@ -1,4 +1,4 @@
-// 負荷テスト: node tools/loadtest.mjs --url <GAS_URL> --token <合鍵> --n 100
+// 負荷テスト: node tools/loadtest.mjs --url https://<worker>/api --token <合鍵> --n 100
 // getList を同時に n 件送り、1回ずつの結果を測る（やり直しはしない）。
 import { pathToFileURL } from 'node:url';
 
@@ -47,7 +47,7 @@ async function one(url, token) {
 async function main() {
   const { url, token, n } = parseArgs(process.argv.slice(2));
   if (!url || !token || !Number.isInteger(n) || n < 1) {
-    console.error('使い方: node tools/loadtest.mjs --url <GAS_URL> --token <合鍵> --n 100');
+    console.error('使い方: node tools/loadtest.mjs --url https://<worker>/api --token <合鍵> --n 100');
     process.exit(2);
   }
   const results = await Promise.all(Array.from({ length: n }, () => one(url, token)));

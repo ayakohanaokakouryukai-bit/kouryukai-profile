@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { callApi } from '../web/js/api.js';
+import { API_URL } from '../web/js/config.js';
 
 const res = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
 const seq = (...items) => {
@@ -62,4 +63,11 @@ test('callApi sends text/plain JSON body with action', async () => {
   assert.equal(init.headers['Content-Type'], 'text/plain;charset=utf-8');
   assert.equal(init.redirect, 'follow');
   assert.deepEqual(JSON.parse(init.body), { action: 'saveProfile', token: 'abc', n: 1 });
+});
+
+test('callApi defaults to the same-origin Worker API URL', async () => {
+  const { fetchImpl, calls } = seq(res({ ok: true }));
+  await callApi('getMe', {}, { fetchImpl });
+  assert.equal(calls[0].url, '/api');
+  assert.equal(API_URL, '/api');
 });

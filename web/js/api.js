@@ -1,11 +1,11 @@
-import { GAS_URL } from './config.js';
+import { API_URL } from './config.js';
 
 export async function callApi(action, payload, {
   fetchImpl = (...a) => fetch(...a),
   retries = 4,
   baseDelayMs = 2000,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
-  url = GAS_URL,
+  url = API_URL,
   onRetry,
 } = {}) {
   const body = JSON.stringify({ action, ...payload });

@@ -14,8 +14,7 @@ export function participantCard(p, onOpen) {
     el('div', { className: 'card-head' },
       avatar(p),
       el('div', {},
-        el('p', { className: 'card-name' }, document.createTextNode(p.name || ''),
-          p.staff ? el('span', { className: 'badge', text: 'スタッフ' }) : null),
+        el('p', { className: 'card-name' }, document.createTextNode(p.name || '')),
         el('div', { className: 'chips card-fields' },
           ...(p.fields || []).map((f) => el('span', { className: 'chip', text: f }))))),
     el('p', { className: 'card-job', text: p.job || '' }),
@@ -34,8 +33,7 @@ export function detailBody(p) {
     : (p.link ? document.createTextNode(p.link) : null);
   return [
     el('div', { className: 'card-head' }, avatar(p, 'avatar avatar-lg'),
-      el('h2', { className: 'detail-title', tabIndex: -1 }, document.createTextNode(p.name || ''),
-        p.staff ? el('span', { className: 'badge', text: 'スタッフ' }) : null)),
+      el('h2', { className: 'detail-title', tabIndex: -1 }, document.createTextNode(p.name || ''))),
     el('dl', { className: 'detail detail-plain' },
       ...row('今やっていること', document.createTextNode(p.job || '')),
       ...row('分野', el('div', { className: 'chips', style: 'margin:0' },
