@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeFakeD1 } from './fake-d1.js';
 
-const files = ['worker/migrations/0001_init.sql'];
+const files = ['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql'];
 
 test('migration creates the four tables', async () => {
   const db = makeFakeD1(files);

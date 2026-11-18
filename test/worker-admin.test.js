@@ -12,7 +12,7 @@ const TOK = 'a'.repeat(32);
 
 async function setup() {
   const env = {
-    DB: makeFakeD1(['worker/migrations/0001_init.sql']),
+    DB: makeFakeD1(['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql']),
     EXPIRES_AT: EXPIRES, APP_BASE_URL: BASE, SYNC_SECRET: 'sek', GAS_MAIL_URL: 'https://gas.example/exec',
   };
   await env.DB.prepare("INSERT INTO applicants (email, canceled) VALUES ('a@example.com', 0)").run();
@@ -157,7 +157,7 @@ test('export: tokens with url, profiles with fields array, no photo bytes', asyn
   assert.deepEqual(r.json, {
     ok: true,
     tokens: [{ email: 'a@example.com', url: BASE + '/me.html#t=' + TOK, issuedAt: '2026-11-30T00:00:00.000Z', lastSentDate: '2026-11-30', pending: true }],
-    profiles: [{ email: 'a@example.com', name: 'N', job: 'J', fields: ['IT', 'x'], challenge: 'c', strengths: 's', needs: 'n', link: '',
+    profiles: [{ email: 'a@example.com', name: 'N', job: 'J', fields: ['IT', 'x'], challenge: 'c', strengths: 's', needs: 'n', link: '', sns: {},
       hasPhoto: true, consent: true, consentAt: 'ca', updatedAt: 'ua' }],
   });
   assert.ok(!JSON.stringify(r.json).includes('"data"'));

@@ -8,7 +8,7 @@ import { getProfile, replaceApplicants, countApplicants } from '../worker/src/db
 
 const NOW = new Date('2026-12-01T03:00:00Z');
 const BASE = 'https://app.example';
-const newDb = () => makeFakeD1(['worker/migrations/0001_init.sql']);
+const newDb = () => makeFakeD1(['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql']);
 
 // Wraps a D1 so that the BLOB column comes back as a plain number array, like real D1.
 function arrayBlobDb(db) {
@@ -65,7 +65,7 @@ test('getProfile: photo-only row keeps photoUrl, is not visible; no text and no 
   const db = newDb();
   await db.prepare("INSERT INTO profiles (email, photo_id, consent, updated_at) VALUES ('a@x.com', ?, 1, '')").bind('b'.repeat(32)).run();
   const r = await getProfile(db, 'a@x.com');
-  assert.deepEqual(r.profile, { name: '', job: '', fields: [], challenge: '', strengths: '', needs: '', link: '', photoUrl: '/api/photo/' + 'b'.repeat(32) });
+  assert.deepEqual(r.profile, { name: '', job: '', fields: [], challenge: '', strengths: '', needs: '', link: '', sns: {}, photoUrl: '/api/photo/' + 'b'.repeat(32) });
   const { isVisible } = await import('../worker/src/rules.js');
   assert.equal(isVisible(r), false);
   await db.prepare("INSERT INTO profiles (email, consent, updated_at) VALUES ('c@x.com', 0, '')").run();

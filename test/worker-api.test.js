@@ -10,7 +10,7 @@ const valid = { name: 'たろう', job: '会社員', fields: ['IT・Web'], chall
 
 async function setup(extra = {}) {
   const env = {
-    DB: makeFakeD1(['worker/migrations/0001_init.sql']),
+    DB: makeFakeD1(['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql']),
     EXPIRES_AT: '2027-05-06T23:59:59+09:00',
     ASSETS: { fetch: async (req) => new Response('asset:' + new URL(req.url).pathname) },
     ...extra,
@@ -61,7 +61,7 @@ test('saveProfile: valid with consent -> visible, fields stored as JSON', async 
   const r = await call(env, { action: 'saveProfile', token: 'tokena', profile: valid, consent: true });
   assert.equal(r.ok, true);
   assert.equal(r.visible, true);
-  assert.deepEqual(r.profile, { ...valid, photoUrl: '' });
+  assert.deepEqual(r.profile, { ...valid, sns: {}, photoUrl: '' });
   const row = await env.DB.prepare("SELECT * FROM profiles WHERE email = 'a@x.jp'").first();
   assert.equal(row.fields, JSON.stringify(['IT・Web']));
   assert.equal(row.consent, 1);
@@ -69,7 +69,7 @@ test('saveProfile: valid with consent -> visible, fields stored as JSON', async 
   const me = await call(env, { action: 'getMe', token: 'tokena' });
   assert.equal(me.visible, true);
   assert.equal(me.consent, true);
-  assert.deepEqual(me.profile, { ...valid, photoUrl: '' });
+  assert.deepEqual(me.profile, { ...valid, sns: {}, photoUrl: '' });
 });
 
 test('saveProfile: second save keeps consent without flag and original consentAt', async () => {
@@ -119,7 +119,7 @@ test('getList: only visible non-canceled, newest consent first, no email/staff',
   for (const p of r.participants) {
     assert.equal('email' in p, false);
     assert.equal('staff' in p, false);
-    assert.deepEqual(Object.keys(p).sort(), ['challenge', 'fields', 'job', 'link', 'name', 'needs', 'photoUrl', 'strengths']);
+    assert.deepEqual(Object.keys(p).sort(), ['challenge', 'fields', 'job', 'link', 'name', 'needs', 'photoUrl', 'sns', 'strengths']);
   }
   assert.equal(r.generatedAt, NOW.toISOString());
 });
@@ -155,4 +155,27 @@ test('router: other paths go to ASSETS', async () => {
   const env = await setup();
   const res = await worker.fetch(new Request('https://x/me.html'), env, { waitUntil() {} });
   assert.equal(await res.text(), 'asset:/me.html');
+});
+
+test('saveProfile: SNS ids are normalized, stored as JSON and shown in getMe and getList', async () => {
+  const env = await setup();
+  const profile = { ...valid, sns: { instagram: '@ig_user', x: 'https://x.com/x_user', threads: '', facebook: 'fb.name' } };
+  const r = await call(env, { action: 'saveProfile', token: 'tokena', profile, consent: true });
+  assert.equal(r.ok, true);
+  const want = { instagram: 'ig_user', x: 'x_user', facebook: 'fb.name' };
+  assert.deepEqual(r.profile.sns, want);
+  const row = await env.DB.prepare("SELECT sns FROM profiles WHERE email = 'a@x.jp'").first();
+  assert.deepEqual(JSON.parse(row.sns), want);
+  const me = await call(env, { action: 'getMe', token: 'tokena' });
+  assert.deepEqual(me.profile.sns, want);
+  const list = await call(env, { action: 'getList', token: 'tokena' });
+  assert.deepEqual(list.participants[0].sns, want);
+});
+
+test('saveProfile: a bad SNS id is a validation error keyed sns_<name>', async () => {
+  const env = await setup();
+  const r = await call(env, { action: 'saveProfile', token: 'tokena', profile: { ...valid, sns: { x: 'not valid id!' } }, consent: true });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'validation');
+  assert.ok(r.fieldErrors.sns_x);
 });

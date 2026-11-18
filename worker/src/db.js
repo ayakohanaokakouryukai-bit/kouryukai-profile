@@ -1,4 +1,5 @@
 // D1 access. Emails are stored normalized by the callers.
+import { parseSns } from '../../web/js/sns.js';
 
 const photoUrlOf_ = (id) => (id ? '/api/photo/' + id : '');
 
@@ -49,7 +50,7 @@ function profileRow_(r) {
     // A photo-only row still yields a profile object (empty text fields) so the photo is not lost.
     profile: hasText || hasPhoto ? {
       name: s_(r.name), job: s_(r.job), fields: parseFields_(r.fields), challenge: s_(r.challenge),
-      strengths: s_(r.strengths), needs: s_(r.needs), link: r.link || '', photoUrl: photoUrlOf_(r.photo_id),
+      strengths: s_(r.strengths), needs: s_(r.needs), link: r.link || '', sns: parseSns(r.sns), photoUrl: photoUrlOf_(r.photo_id),
     } : null,
     photoId: r.photo_id || '',
     consent: r.consent === 1,
@@ -66,15 +67,15 @@ export async function getProfile(db, email) {
 export async function upsertProfile(db, row) {
   const p = row.profile;
   await db.prepare(
-    'INSERT INTO profiles (email, name, job, fields, challenge, strengths, needs, link, photo_id, consent, consent_at, updated_at) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+    'INSERT INTO profiles (email, name, job, fields, challenge, strengths, needs, link, sns, photo_id, consent, consent_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
     'ON CONFLICT(email) DO UPDATE SET name = excluded.name, job = excluded.job, fields = excluded.fields, ' +
-    'challenge = excluded.challenge, strengths = excluded.strengths, needs = excluded.needs, link = excluded.link, ' +
+    'challenge = excluded.challenge, strengths = excluded.strengths, needs = excluded.needs, link = excluded.link, sns = excluded.sns, ' +
     'photo_id = excluded.photo_id, consent = excluded.consent, consent_at = excluded.consent_at, updated_at = excluded.updated_at'
   ).bind(
     row.email,
     p ? p.name : null, p ? p.job : null, p ? JSON.stringify(p.fields || []) : null,
-    p ? p.challenge : null, p ? p.strengths : null, p ? p.needs : null, p ? (p.link || '') : null,
+    p ? p.challenge : null, p ? p.strengths : null, p ? p.needs : null, p ? (p.link || '') : null, JSON.stringify((p && p.sns) || {}),
     row.photoId || '', row.consent ? 1 : 0, row.consentAt || '', row.updatedAt || ''
   ).run();
 }

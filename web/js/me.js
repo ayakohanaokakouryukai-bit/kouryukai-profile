@@ -3,12 +3,13 @@ import { readToken, clearToken } from './token.js';
 import { clearList } from './listCache.js';
 import { FIELD_OPTIONS, LIMITS } from './fields.js';
 import { el, noticeBox, consentView, profileView, photoControl } from './meView.js';
+import { snsFormBlock } from './snsView.js';
 
 const app = document.getElementById('app');
 const statusBar = document.getElementById('status-bar');
 const LABELS = {
   name: '名前', job: '今やっていること（仕事）', fields: '分野', challenge: '今挑戦していること',
-  strengths: '得意なこと・力になれること', needs: '苦手なこと・力を借りたいこと', link: 'Web・SNSのリンク（任意）',
+  strengths: '得意なこと・力になれること', needs: '苦手なこと・力を借りたいこと', link: 'その他のURL（ホームページなど・任意）',
 };
 const REQUIRED = ['name', 'job', 'challenge', 'strengths', 'needs'];
 const MULTILINE = new Set(['challenge', 'strengths', 'needs']);
@@ -109,6 +110,10 @@ function showForm() {
     inputs[key] = ta;
     nodes.push(fieldBlock(key, ta));
   }
+  const snsBlock = snsFormBlock(profile.sns || {});
+  Object.assign(errEls, snsBlock.errEls);
+  for (const [k, input] of Object.entries(snsBlock.inputs)) inputs[`sns_${k}`] = input;
+  nodes.push(snsBlock.node);
   const linkInput = el('input', { type: 'url', id: 'link', value: profile.link || '', maxLength: LIMITS.link, inputMode: 'url', 'aria-describedby': 'err-link' });
   inputs.link = linkInput;
   nodes.push(fieldBlock('link', linkInput));
@@ -146,7 +151,9 @@ function showForm() {
     const v = { fields: boxes.filter((b) => b.checked).map((b) => b.value) };
     for (const k of [...REQUIRED, 'link']) v[k] = inputs[k].value;
     v.link = v.link.trim();
-    const errs = clientValidate(v);
+    const sv = snsBlock.validate(snsBlock.read());
+    v.sns = sv.value || {};
+    const errs = { ...clientValidate(v), ...sv.errors };
     showErrors(errs);
     if (Object.keys(errs).length) return;
 

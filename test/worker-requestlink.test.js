@@ -10,7 +10,7 @@ const EXPIRES = '2027-05-06T23:59:59+09:00';
 
 async function setup() {
   const env = {
-    DB: makeFakeD1(['worker/migrations/0001_init.sql']),
+    DB: makeFakeD1(['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql']),
     EXPIRES_AT: EXPIRES, APP_BASE_URL: 'https://app.example', SYNC_SECRET: 'sek', GAS_MAIL_URL: 'https://gas.example/exec',
   };
   await env.DB.prepare("INSERT INTO applicants (email, canceled) VALUES ('a@example.com', 0), ('c@example.com', 1)").run();

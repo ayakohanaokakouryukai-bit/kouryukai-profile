@@ -1,4 +1,5 @@
 // Pure decision rules (ES module port of gas/Rules.js).
+import { validateSns } from '../../web/js/sns.js';
 
 export const FIELD_OPTIONS = [
   'IT・Web', 'デザイン・クリエイティブ', '美容・健康', '飲食', '教育・コーチング',
@@ -63,6 +64,10 @@ export function validateProfile(p) {
     value.link = link;
   }
 
+  var sns = validateSns(p.sns);
+  if (sns.ok) value.sns = sns.value;
+  else for (var k in sns.errors) errors['sns_' + k] = sns.errors[k];
+
   if (Object.keys(errors).length > 0) return { ok: false, fieldErrors: errors };
   return { ok: true, value: value };
 }
@@ -124,6 +129,7 @@ export function toPublicProfile(row) {
     strengths: p.strengths,
     needs: p.needs,
     link: p.link || '',
+    sns: p.sns || {},
     photoUrl: p.photoUrl || '',
   };
 }

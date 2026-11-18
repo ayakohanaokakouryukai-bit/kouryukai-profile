@@ -43,7 +43,7 @@ function readApplicantsFromTable(headers, rows, emailHeader, cancelHeader) {
 }
 
 var MIRROR_KEYS_HEADERS = ['メールアドレス', '専用URL', '発行日時', '最後に送った日', '送信待ち'];
-var MIRROR_PROFILES_HEADERS = ['メールアドレス', '名前', '今やっていること', '分野', '今挑戦していること', '得意なこと', '苦手なこと', 'リンク', '写真あり', '公開の同意', '同意日時', '更新日時'];
+var MIRROR_PROFILES_HEADERS = ['メールアドレス', '名前', '今やっていること', '分野', '今挑戦していること', '得意なこと', '苦手なこと', 'Instagram', 'X', 'Threads', 'Facebook', 'その他のURL', '写真あり', '公開の同意', '同意日時', '更新日時'];
 
 function mirrorRows(exportJson) {
   var tokens = (exportJson.tokens || []).map(function (t) {
@@ -51,7 +51,9 @@ function mirrorRows(exportJson) {
   });
   var profiles = (exportJson.profiles || []).map(function (p) {
     var fields = Array.isArray(p.fields) ? p.fields.join('、') : '';
-    return [p.email, p.name, p.job, fields, p.challenge, p.strengths, p.needs, p.link,
+    var sns = p.sns && typeof p.sns === 'object' ? p.sns : {};
+    return [p.email, p.name, p.job, fields, p.challenge, p.strengths, p.needs,
+      sns.instagram, sns.x, sns.threads, sns.facebook, p.link,
       p.hasPhoto ? 'あり' : '', p.consent ? 'はい' : '', p.consentAt, p.updatedAt].map(function (v) { return asLiteral(v == null ? '' : v); });
   });
   return { tokens: tokens, profiles: profiles };

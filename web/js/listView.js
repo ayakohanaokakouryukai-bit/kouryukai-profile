@@ -1,5 +1,6 @@
 import { el, isHttpUrl } from './meView.js';
 import { initialOf } from './text.js';
+import { snsLinks } from './snsView.js';
 
 function avatar(p, className = 'avatar') {
   const circle = () => el('div', { className, 'aria-hidden': 'true', text: initialOf(p.name) });
@@ -9,18 +10,20 @@ function avatar(p, className = 'avatar') {
   return img;
 }
 
+// The whole card opens the detail (the name button's ::after covers the card); SNS icons sit above it.
 export function participantCard(p, onOpen) {
-  const btn = el('button', { type: 'button', className: 'card card-button' },
+  const btn = el('button', { type: 'button', className: 'card-open' }, document.createTextNode(p.name || ''));
+  btn.addEventListener('click', () => onOpen(p, btn));
+  return el('article', { className: 'card card-person' },
     el('div', { className: 'card-head' },
       avatar(p),
       el('div', {},
-        el('p', { className: 'card-name' }, document.createTextNode(p.name || '')),
+        el('p', { className: 'card-name' }, btn),
         el('div', { className: 'chips card-fields' },
           ...(p.fields || []).map((f) => el('span', { className: 'chip', text: f }))))),
     el('p', { className: 'card-job', text: p.job || '' }),
-    el('p', { className: 'card-challenge', text: `挑戦中：${p.challenge || ''}` }));
-  btn.addEventListener('click', () => onOpen(p, btn));
-  return btn;
+    el('p', { className: 'card-challenge', text: `挑戦中：${p.challenge || ''}` }),
+    snsLinks(p.sns));
 }
 
 function row(label, node) {
@@ -41,7 +44,8 @@ export function detailBody(p) {
       ...row('今挑戦していること', document.createTextNode(p.challenge || '')),
       ...row('得意なこと・力になれること', document.createTextNode(p.strengths || '')),
       ...row('苦手なこと・力を借りたいこと', document.createTextNode(p.needs || '')),
-      ...(link ? row('Web・SNSのリンク', link) : [])),
+      ...(snsLinks(p.sns, { withIds: true }) ? row('SNS', snsLinks(p.sns, { withIds: true })) : []),
+      ...(link ? row('その他のURL', link) : [])),
   ];
 }
 

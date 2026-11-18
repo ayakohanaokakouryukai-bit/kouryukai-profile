@@ -31,7 +31,7 @@ test('isEligible false for unknown email', () => assert.equal(isEligible([], 'a@
 test('validateProfile accepts valid', () => {
   const r = validateProfile(valid);
   assert.equal(r.ok, true);
-  assert.equal(JSON.stringify(r.value), JSON.stringify(valid));
+  assert.equal(JSON.stringify(r.value), JSON.stringify({ ...valid, sns: {} }));
 });
 test('validateProfile rejects 4 fields', () =>
   assert.ok(validateProfile({ ...valid, fields: ['IT・Web', '飲食', '学生', 'その他'] }).fieldErrors.fields));

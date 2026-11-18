@@ -64,7 +64,7 @@ async function export_(env) {
     return {
       email: p.email, name: pr.name == null ? '' : pr.name, job: pr.job == null ? '' : pr.job, fields: pr.fields || [],
       challenge: pr.challenge == null ? '' : pr.challenge, strengths: pr.strengths == null ? '' : pr.strengths,
-      needs: pr.needs == null ? '' : pr.needs, link: pr.link || '', hasPhoto: !!p.photoId,
+      needs: pr.needs == null ? '' : pr.needs, link: pr.link || '', sns: pr.sns || {}, hasPhoto: !!p.photoId,
       consent: p.consent, consentAt: p.consentAt, updatedAt: p.updatedAt,
     };
   });

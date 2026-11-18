@@ -10,7 +10,7 @@ const CC = 'public, max-age=31536000, immutable';
 
 async function setup() {
   const env = {
-    DB: makeFakeD1(['worker/migrations/0001_init.sql']),
+    DB: makeFakeD1(['worker/migrations/0001_init.sql', 'worker/migrations/0002_sns.sql']),
     EXPIRES_AT: '2027-05-06T23:59:59+09:00',
     ASSETS: { fetch: async (req) => new Response('asset:' + new URL(req.url).pathname) },
   };
@@ -81,7 +81,7 @@ test('uploadPhoto then saveProfile keeps the photo; saveProfile then uploadPhoto
   assert.equal(s.profile.photoUrl, a.photoUrl);
   const c = await call(env, { action: 'uploadPhoto', token: 'tokena', base64: jpeg([9]), mimeType: 'image/jpeg' });
   const me = await call(env, { action: 'getMe', token: 'tokena' });
-  assert.deepEqual(me.profile, { ...valid, photoUrl: c.photoUrl });
+  assert.deepEqual(me.profile, { ...valid, sns: {}, photoUrl: c.photoUrl });
   assert.equal(me.consent, true);
 });
 

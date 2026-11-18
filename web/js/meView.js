@@ -1,6 +1,7 @@
 import { callApi } from './api.js';
 import { resizeToJpegBase64 } from './photo.js';
 import { formatJstDateLabel } from './dates.js';
+import { snsLinks } from './snsView.js';
 
 export const KEY_NOTICE = 'このページのURLは、あなた専用の合鍵です。人に教えないでください。';
 export const BAD_IMAGE = 'この画像は使えません。別の画像を選んでください。';
@@ -110,7 +111,8 @@ export function profileView(profile, handlers) {
     ...row('今挑戦していること', document.createTextNode(p.challenge || '')),
     ...row('得意なこと・力になれること', document.createTextNode(p.strengths || '')),
     ...row('苦手なこと・力を借りたいこと', document.createTextNode(p.needs || '')),
-    ...(link ? row('Web・SNSのリンク', link) : []));
+    ...(snsLinks(p.sns, { withIds: true }) ? row('SNS', snsLinks(p.sns, { withIds: true })) : []),
+    ...(link ? row('その他のURL', link) : []));
   return el('section', {},
     handlers.saved ? el('p', { className: 'notice', role: 'status', text: '保存しました' }) : null,
     photoDisplay(p),

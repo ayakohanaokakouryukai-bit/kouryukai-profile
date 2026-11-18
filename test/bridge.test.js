@@ -101,11 +101,12 @@ test('mirrorRows maps export to tab rows', () => {
   const ctx = load(makeEnv());
   const out = J(ctx.mirrorRows({
     tokens: [{ email: 'a@x.com', url: 'u', issuedAt: 'i', lastSentDate: '2026-11-19', pending: true }, { email: 'b@x.com', url: 'u2', issuedAt: 'i2', lastSentDate: '', pending: false }],
-    profiles: [{ email: 'a@x.com', name: '=evil', job: 'j', fields: ['x', 'y'], challenge: 'c', strengths: 's', needs: 'n', link: 'l', hasPhoto: true, consent: false, consentAt: '', updatedAt: 'u' }],
+    profiles: [{ email: 'a@x.com', name: '=evil', job: 'j', fields: ['x', 'y'], challenge: 'c', strengths: 's', needs: 'n', link: 'l', sns: { instagram: 'ig', facebook: 'fb.n' }, hasPhoto: true, consent: false, consentAt: '', updatedAt: 'u' }],
   }));
   assert.deepEqual(out.tokens, [['a@x.com', 'u', 'i', '2026-11-19', '送信待ち'], ['b@x.com', 'u2', 'i2', '', '']]);
-  assert.deepEqual(out.profiles[0], ['a@x.com', "'=evil", 'j', 'x、y', 'c', 's', 'n', 'l', 'あり', '', '', 'u']);
-  assert.equal(out.profiles[0].length, 12);
+  assert.deepEqual(out.profiles[0], ['a@x.com', "'=evil", 'j', 'x、y', 'c', 's', 'n', 'ig', '', '', 'fb.n', 'l', 'あり', '', '', 'u']);
+  assert.equal(out.profiles[0].length, 16);
+  assert.equal(ctx.MIRROR_PROFILES_HEADERS.length, 16);
 });
 
 // ---- doPost
