@@ -10,10 +10,10 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "kouryukai-profile"
-database_id = "REPLACE_AT_SETUP"
+database_id = "f79004e0-990b-4f42-a530-3899df439d8d"
 migrations_dir = "migrations"
 
 [vars]
 EXPIRES_AT = "2027-05-06T23:59:59+09:00"
-APP_BASE_URL = "REPLACE_AT_SETUP"
-GAS_MAIL_URL = "REPLACE_AT_SETUP"
+APP_BASE_URL = "https://kouryukai-profile.kouryukai-profile-worker.workers.dev"
+GAS_MAIL_URL = "https://script.google.com/macros/s/AKfycbxWvQ8zHJ3uEG0pV3O2y2b0aqjVR6zjUezR40viKqvBf4aXMWLeekLPbBjnPbgexTAH/exec"
