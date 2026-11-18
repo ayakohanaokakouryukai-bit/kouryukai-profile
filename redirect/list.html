@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>100人交流会 | 新しいページへ移動します</title>
+  <script>
+    var NEW_ORIGIN = 'REPLACE_AT_SETUP';
+    var NEW_URL = NEW_ORIGIN + location.pathname.replace(/^\/kouryukai-profile/, '') + location.hash;
+    location.replace(NEW_URL);
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('go').href = NEW_URL;
+    });
+  </script>
+</head>
+<body>
+  <p><a id="go" href="#">新しいページに移動しました。自動で移動しない場合はこちら</a></p>
+</body>
+</html>
