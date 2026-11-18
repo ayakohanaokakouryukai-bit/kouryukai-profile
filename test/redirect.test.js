@@ -8,7 +8,7 @@ for (const name of ['index.html', 'me.html', 'list.html']) {
     assert.match(html, /location\.replace\(/);
     assert.match(html, /location\.hash/);
     assert.match(html, /<meta name="robots" content="noindex">/);
-    assert.match(html, /NEW_ORIGIN = 'REPLACE_AT_SETUP'/);
+    assert.match(html, /NEW_ORIGIN = 'https:\/\/kouryukai-profile\.kouryukai-profile-worker\.workers\.dev'/);
     assert.match(html, /\/\^\\\/kouryukai-profile\//);
     assert.match(html, /<a id="go" href=/);
   });
@@ -25,7 +25,7 @@ for (const name of ['index.html', 'me.html', 'list.html']) {
     assert.match(html, /NEW_ORIGIN\.indexOf\('https:\/\/'\) === 0/);
     assert.match(html, /準備中/);
     const run = (origin) => {
-      const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/'REPLACE_AT_SETUP'/, JSON.stringify(origin));
+      const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/NEW_ORIGIN = '[^']*'/, 'NEW_ORIGIN = ' + JSON.stringify(origin));
       const calls = [];
       const link = { href: '#', style: {} };
       const msg = { style: { display: 'none' } };
