@@ -228,12 +228,12 @@ test('migrateFromOldTabs posts tokens and profiles (no staff) with photos', () =
     profiles: [['email', 'name', 'job', 'fields', 'challenge', 'strengths', 'needs', 'link', 'photoFileId', 'photoUrl', 'consent', 'consentAt', 'updatedAt', 'staff'],
       ['A@x.com', 'N', 'J', 'x、y', 'c', 's', 'n', 'l', 'fid', 'pu', true, 'ca', 'ua', true]],
   } };
-  const env = makeEnv({ sheets, props: { OLD_PHOTO_FOLDER_ID: 'ph' } });
+  const env = makeEnv({ sheets });
   env.g.DriveApp = { getFileById: (id) => ({ getBlob: () => ({ getBytes: () => [1, 2, 3] }) }) };
   const ctx = load(env);
   ctx.migrateFromOldTabs();
-  const f = env.fetches.find((x) => x.url.endsWith('/admin/import'));
-  const body = JSON.parse(f.opts.payload);
+  const bodies = env.fetches.filter((x) => x.url.endsWith('/admin/import')).map((f) => JSON.parse(f.opts.payload));
+  const body = { tokens: bodies.flatMap((x) => x.tokens), profiles: bodies.flatMap((x) => x.profiles) };
   assert.deepEqual(body.tokens, [{ email: 'a@x.com', token: 'tok1', issuedAt: '2026-11-01T00:00:00.000Z', lastSentDate: '2026-11-18' }]);
   assert.equal(body.profiles[0].email, 'a@x.com');
   assert.deepEqual(body.profiles[0].profile, { name: 'N', job: 'J', fields: ['x', 'y'], challenge: 'c', strengths: 's', needs: 'n', link: 'l' });
@@ -271,4 +271,44 @@ test('timerEvery5Min: a failing step does not stop the others', () => {
   const env = makeEnv({ sheets: RESET_SHEETS(), fetchHandler: (url) => { throw new Error('net'); } });
   assert.doesNotThrow(() => load(env).timerEvery5Min());
   assert.ok(env.fetches.length >= 3);
+});
+
+// ---- final review fixes
+test('migrate: 12 profiles are sent as 3 import POSTs (5/5/2), tokens in chunks of 20', () => {
+  const profRows = Array.from({ length: 12 }, (_, i) => [`p${i}@x.com`, 'N', 'J', 'x', 'c', 's', 'n', 'l', '', '', true, 'ca', 'ua']);
+  const tokRows = Array.from({ length: 45 }, (_, i) => [`t${i}@x.com`, `tok${i}`, 'u', '2026-11-01T00:00:00.000Z', '2026-11-18', false]);
+  const sheets = { d1: {
+    tokens: [['email', 'token', 'url', 'issuedAt', 'lastSentDate', 'pending'], ...tokRows],
+    profiles: [['email', 'name', 'job', 'fields', 'challenge', 'strengths', 'needs', 'link', 'photoFileId', 'photoUrl', 'consent', 'consentAt', 'updatedAt'], ...profRows],
+  } };
+  const env = makeEnv({ sheets, fetchHandler: () => ({ code: 200, body: '{"ok":true,"tokens":0,"profiles":0}' }) });
+  load(env).migrateFromOldTabs();
+  const bodies = env.fetches.filter((x) => x.url.endsWith('/admin/import')).map((f) => JSON.parse(f.opts.payload));
+  const withProfiles = bodies.filter((b) => b.profiles.length > 0);
+  assert.deepEqual(withProfiles.map((b) => b.profiles.length), [5, 5, 2]);
+  assert.ok(withProfiles.every((b) => b.tokens.length === 0));
+  const withTokens = bodies.filter((b) => b.tokens.length > 0);
+  assert.deepEqual(withTokens.map((b) => b.tokens.length), [20, 20, 5]);
+  assert.equal(bodies.length, 6);
+});
+
+test('migrate: a failing chunk throws', () => {
+  const sheets = { d1: { tokens: [['email', 'token'], ['a@x.com', 't']], profiles: [['email']] } };
+  const env = makeEnv({ sheets, fetchHandler: () => ({ code: 500, body: 'x' }) });
+  assert.throws(() => load(env).migrateFromOldTabs(), /import failed/);
+});
+
+test('resendPending: quota alert carries the count of mails still unsent', () => {
+  const env = makeEnv({
+    quota: 5,
+    fetchHandler: (url) => (url.endsWith('/admin/pending-mails')
+      ? { code: 200, body: JSON.stringify({ ok: true, mails: [1, 2, 3].map((i) => ({ email: `u${i}@x.com`, url: `https://w/#t=${i}` })) }) }
+      : { code: 200, body: '{"ok":true}' }),
+  });
+  const orig = env.g.MailApp.sendEmail;
+  env.g.MailApp.sendEmail = (m) => { if (m.to !== 'org@example.com' && m.to !== 'u1@x.com') throw new Error('boom'); orig(m); };
+  load(env).resendPending();
+  const alert = env.mails.find((m) => m.to === 'org@example.com');
+  assert.ok(alert, 'alert sent');
+  assert.match(alert.body, /送信待ちのメール: 2 通/);
 });

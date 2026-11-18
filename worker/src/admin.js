@@ -1,8 +1,8 @@
 // Admin endpoints for the GAS bridge. Every route requires the X-Sync-Secret header.
-import { normalizeEmail, jstDate } from './rules.js';
+import { normalizeEmail, jstDate, isExpired } from './rules.js';
 import {
   getProfile, upsertProfile, upsertToken, markSent, listAllTokens, listAllProfiles, resetToken,
-  countApplicants, replaceApplicants, claimStalePending, deletePhotoById,
+  countApplicants, replaceApplicants, claimStalePending, deletePhotoById, listStalePending,
 } from './db.js';
 
 const HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -10,6 +10,7 @@ const reply_ = (obj, status = 200) => new Response(JSON.stringify(obj), { status
 const fail_ = (error, status = 200) => reply_({ ok: false, error }, status);
 
 const RESEND_AFTER_MS = 15 * 60 * 1000;
+const MAX_MAILS_PER_CALL = 20; // keeps one invocation well under D1's 50-queries limit
 
 // Constant-time: compares byte lengths and XORs over every byte, no early exit.
 function secretMatches_(given, expected) {
@@ -72,12 +73,10 @@ async function export_(env) {
 
 async function pendingMails_(env, deps) {
   const now = deps.now();
-  const cutoff = now.getTime() - RESEND_AFTER_MS;
+  if (isExpired(now, env.EXPIRES_AT)) return { ok: true, mails: [] };
+  const cutoffIso = new Date(now.getTime() - RESEND_AFTER_MS).toISOString();
   const mails = [];
-  for (const row of await listAllTokens(env.DB)) {
-    if (!row.pending || !row.requestedAt) continue;
-    const t = Date.parse(row.requestedAt);
-    if (Number.isNaN(t) || t > cutoff) continue;
+  for (const row of await listStalePending(env.DB, cutoffIso, MAX_MAILS_PER_CALL)) {
     // Compare-and-set so two overlapping polls cannot both return the same mail.
     if (await claimStalePending(env.DB, row.email, row.requestedAt, now.toISOString())) {
       mails.push({ email: row.email, url: urlOf_(env, row.token) });

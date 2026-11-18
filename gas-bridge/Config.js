@@ -1,6 +1,6 @@
 // Script-property backed configuration for the bridge. Nothing secret is committed.
 // Required: WORKER_URL (no trailing slash), SYNC_SECRET, FORM_SHEET_ID, FORM_SHEET_NAME, EMAIL_HEADER,
-// DATA_SHEET_ID, ORGANIZER_EMAIL. Optional: CANCEL_HEADER, EXPIRES_AT, OLD_PHOTO_FOLDER_ID (migration only).
+// DATA_SHEET_ID, ORGANIZER_EMAIL. Optional: CANCEL_HEADER, EXPIRES_AT.
 
 var ALERT_THRESHOLD = 10;
 var DEFAULT_EXPIRES_AT = '2027-05-06T23:59:59+09:00';
@@ -32,8 +32,6 @@ function getConfig() {
   config.cancelHeader = cancel && String(cancel).trim() !== '' ? String(cancel).trim() : 'キャンセル';
   var exp = props.getProperty('EXPIRES_AT');
   config.expiresAt = exp && String(exp).trim() !== '' ? String(exp).trim() : DEFAULT_EXPIRES_AT;
-  var folder = props.getProperty('OLD_PHOTO_FOLDER_ID');
-  config.oldPhotoFolderId = folder ? String(folder).trim() : '';
   return config;
 }
 

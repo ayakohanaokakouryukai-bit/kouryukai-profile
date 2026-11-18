@@ -53,7 +53,9 @@ test('uploadPhoto: valid upload is served back identically with immutable cache'
   assert.equal(res.headers.get('Cache-Control'), CC);
   assert.deepEqual(new Uint8Array(await res.arrayBuffer()), new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]));
   const me = await call(env, { action: 'getMe', token: 'tokena' });
-  assert.equal(me.profile, null); // photo-only row: no profile yet
+  assert.equal(me.profile.name, ''); // photo-only row: empty text, photo kept
+  assert.equal(me.profile.photoUrl, r.photoUrl);
+  assert.equal(me.visible, false);
 });
 
 test('uploadPhoto: exactly 2,000,000 chars is accepted', async () => {

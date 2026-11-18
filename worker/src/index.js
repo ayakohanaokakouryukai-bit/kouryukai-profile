@@ -12,7 +12,7 @@ async function servePhoto_(env, id) {
   if (!/^[0-9a-f]{32}$/.test(id)) return notFound_();
   const data = await getPhotoData(env.DB, id);
   if (!data) return notFound_();
-  return new Response(data, {
+  return new Response(new Uint8Array(data), {
     status: 200,
     headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' },
   });

@@ -111,10 +111,10 @@ function alertOnceToday_(propKey, subject, body, config) {
 
 // ---- Link mail
 
-function maybeQuotaAlert_(config) {
+function maybeQuotaAlert_(config, pendingCount) {
   var remaining = MailApp.getRemainingDailyQuota();
   if (remaining < ALERT_THRESHOLD && remaining > 0) {
-    var m = buildQuotaAlertMail(remaining, 0);
+    var m = buildQuotaAlertMail(remaining, pendingCount || 0);
     alertOnceToday_('ALERT_SENT_DATE', m.subject, m.body, config);
   }
 }
@@ -209,12 +209,14 @@ function resendPendingCore_(config) {
   var r = workerCall_(config, 'get', '/admin/pending-mails');
   if (!callOk_(r)) throw new Error('pending-mails failed: HTTP ' + r.code);
   var mails = r.json.mails || [];
+  var sentCount = 0;
   for (var i = 0; i < mails.length; i++) {
     var res = sendLinkMail_(config, mails[i].email, mails[i].url, config.expiresAt);
     if (res === 'quota') break; // the rest stay pending for the next run
+    if (res === 'sent') sentCount++;
     workerCall_(config, 'post', '/admin/mail-result', { email: mails[i].email, sent: res === 'sent' });
   }
-  maybeQuotaAlert_(config);
+  maybeQuotaAlert_(config, mails.length - sentCount);
 }
 
 // ---- Migration from the old tokens / profiles tabs
@@ -257,7 +259,7 @@ function migrateCore_(config) {
     var email = normEmail_(o.email);
     if (!email) continue;
     var fieldsText = String(o.fields == null ? '' : o.fields);
-    var p = {
+    profiles.push({
       email: email,
       profile: {
         name: String(o.name == null ? '' : o.name),
@@ -271,18 +273,38 @@ function migrateCore_(config) {
       consent: toBool_(o.consent),
       consentAt: toIsoString_(o.consentAt),
       updatedAt: toIsoString_(o.updatedAt),
-    };
-    var fileId = String(o.photoFileId == null ? '' : o.photoFileId).trim();
-    if (fileId) {
-      try {
-        p.photoBase64 = Utilities.base64Encode(DriveApp.getFileById(fileId).getBlob().getBytes());
-      } catch (err) {
-        console.warn('photo skipped for ' + email + ': ' + (err && err.message));
-      }
-    }
-    profiles.push(p);
+      _fileId: String(o.photoFileId == null ? '' : o.photoFileId).trim(),
+    });
   }
-  var r = workerCall_(config, 'post', '/admin/import', { tokens: tokens, profiles: profiles });
+  // Small requests: the Worker does several D1 queries per profile / token and has a per-request query cap.
+  var nt = 0;
+  var np = 0;
+  for (var ti = 0; ti < tokens.length; ti += MIGRATE_TOKEN_CHUNK) {
+    nt += importChunk_(config, { tokens: tokens.slice(ti, ti + MIGRATE_TOKEN_CHUNK), profiles: [] }).tokens;
+  }
+  for (var pi = 0; pi < profiles.length; pi += MIGRATE_PROFILE_CHUNK) {
+    var chunk = profiles.slice(pi, pi + MIGRATE_PROFILE_CHUNK).map(function (p) {
+      var fileId = p._fileId;
+      delete p._fileId;
+      if (fileId) {
+        try {
+          p.photoBase64 = Utilities.base64Encode(DriveApp.getFileById(fileId).getBlob().getBytes());
+        } catch (err) {
+          console.warn('photo skipped for ' + p.email + ': ' + (err && err.message));
+        }
+      }
+      return p;
+    });
+    np += importChunk_(config, { tokens: [], profiles: chunk }).profiles;
+  }
+  console.log('migrated tokens=' + nt + ' profiles=' + np);
+}
+
+var MIGRATE_PROFILE_CHUNK = 5;
+var MIGRATE_TOKEN_CHUNK = 20;
+
+function importChunk_(config, body) {
+  var r = workerCall_(config, 'post', '/admin/import', body);
   if (!callOk_(r)) throw new Error('import failed: HTTP ' + r.code);
-  console.log('migrated tokens=' + r.json.tokens + ' profiles=' + r.json.profiles);
+  return { tokens: r.json.tokens || 0, profiles: r.json.profiles || 0 };
 }

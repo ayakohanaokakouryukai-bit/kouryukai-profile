@@ -7,14 +7,22 @@
   <title>100人交流会 | 新しいページへ移動します</title>
   <script>
     var NEW_ORIGIN = 'REPLACE_AT_SETUP';
+    // Only redirect once setup has replaced the placeholder with the real https:// address.
+    var READY = NEW_ORIGIN.indexOf('https://') === 0;
     var NEW_URL = NEW_ORIGIN + location.pathname.replace(/^\/kouryukai-profile/, '') + location.hash;
-    location.replace(NEW_URL);
+    if (READY) location.replace(NEW_URL);
     document.addEventListener('DOMContentLoaded', function () {
-      document.getElementById('go').href = NEW_URL;
+      if (READY) {
+        document.getElementById('go').href = NEW_URL;
+        document.getElementById('go').style.display = '';
+      } else {
+        document.getElementById('wait').style.display = '';
+      }
     });
   </script>
 </head>
 <body>
-  <p><a id="go" href="#">新しいページに移動しました。自動で移動しない場合はこちら</a></p>
+  <p><a id="go" href="#" style="display:none">新しいページに移動しました。自動で移動しない場合はこちら</a></p>
+  <p id="wait" style="display:none">ただいま新しいページを準備中です。しばらくしてからもう一度お試しください。</p>
 </body>
 </html>

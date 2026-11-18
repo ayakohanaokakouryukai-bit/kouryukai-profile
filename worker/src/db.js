@@ -41,12 +41,15 @@ export async function upsertToken(db, row) {
 
 function profileRow_(r) {
   if (!r) return null;
-  const hasProfile = r.name != null;
+  const hasText = r.name != null;
+  const hasPhoto = !!r.photo_id;
+  const s_ = (v) => (v == null ? '' : v);
   return {
     email: r.email,
-    profile: hasProfile ? {
-      name: r.name, job: r.job, fields: parseFields_(r.fields), challenge: r.challenge,
-      strengths: r.strengths, needs: r.needs, link: r.link || '', photoUrl: photoUrlOf_(r.photo_id),
+    // A photo-only row still yields a profile object (empty text fields) so the photo is not lost.
+    profile: hasText || hasPhoto ? {
+      name: s_(r.name), job: s_(r.job), fields: parseFields_(r.fields), challenge: s_(r.challenge),
+      strengths: s_(r.strengths), needs: s_(r.needs), link: r.link || '', photoUrl: photoUrlOf_(r.photo_id),
     } : null,
     photoId: r.photo_id || '',
     consent: r.consent === 1,
@@ -148,11 +151,27 @@ export async function countApplicants(db) {
   return (await db.prepare('SELECT COUNT(*) AS n FROM applicants').first()).n;
 }
 
-// Atomic full replace (one batch = one transaction).
+// Atomic full replace (one batch = one transaction). Multi-row INSERTs keep the statement count low
+// (D1 free plan: 50 queries per invocation; 100 bound parameters per statement -> 50 rows per INSERT).
+const APPLICANT_CHUNK = 50;
 export async function replaceApplicants(db, rows) {
   const stmts = [db.prepare('DELETE FROM applicants')];
-  for (const r of rows) stmts.push(db.prepare('INSERT INTO applicants (email, canceled) VALUES (?, ?)').bind(r.email, r.canceled ? 1 : 0));
+  for (let i = 0; i < rows.length; i += APPLICANT_CHUNK) {
+    const chunk = rows.slice(i, i + APPLICANT_CHUNK);
+    const sql = 'INSERT INTO applicants (email, canceled) VALUES ' + chunk.map(() => '(?, ?)').join(', ');
+    stmts.push(db.prepare(sql).bind(...chunk.flatMap((r) => [r.email, r.canceled ? 1 : 0])));
+  }
   await db.batch(stmts);
+}
+
+// Tokens pending since cutoffIso or earlier whose applicant exists and is not canceled, oldest first.
+export async function listStalePending(db, cutoffIso, limit) {
+  const { results } = await db.prepare(
+    "SELECT t.* FROM tokens t JOIN applicants a ON a.email = t.email " +
+    "WHERE t.pending = 1 AND t.requested_at != '' AND t.requested_at <= ? AND a.canceled = 0 " +
+    'ORDER BY t.requested_at, t.email LIMIT ?'
+  ).bind(cutoffIso, limit).all();
+  return results.map(tokenRow_);
 }
 
 // Deletes the token row (clearing lastSentDate and pending with it); true if one existed.
