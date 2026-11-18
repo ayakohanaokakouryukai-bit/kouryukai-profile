@@ -141,3 +141,44 @@ export async function listVisibleProfiles(db) {
   ).all();
   return results.map(profileRow_);
 }
+
+// ---- admin helpers ----
+
+export async function countApplicants(db) {
+  return (await db.prepare('SELECT COUNT(*) AS n FROM applicants').first()).n;
+}
+
+// Atomic full replace (one batch = one transaction).
+export async function replaceApplicants(db, rows) {
+  const stmts = [db.prepare('DELETE FROM applicants')];
+  for (const r of rows) stmts.push(db.prepare('INSERT INTO applicants (email, canceled) VALUES (?, ?)').bind(r.email, r.canceled ? 1 : 0));
+  await db.batch(stmts);
+}
+
+// Deletes the token row (clearing lastSentDate and pending with it); true if one existed.
+export async function resetToken(db, email) {
+  const r = await db.prepare('DELETE FROM tokens WHERE email = ?').bind(email).run();
+  return r.meta.changes === 1;
+}
+
+export async function listAllTokens(db) {
+  const { results } = await db.prepare('SELECT * FROM tokens ORDER BY email').all();
+  return results.map(tokenRow_);
+}
+
+export async function listAllProfiles(db) {
+  const { results } = await db.prepare('SELECT * FROM profiles ORDER BY email').all();
+  return results.map(profileRow_);
+}
+
+// Compare-and-set on requested_at: true only for the caller that moved it.
+export async function claimStalePending(db, email, oldRequestedAt, newRequestedAt) {
+  const r = await db.prepare(
+    'UPDATE tokens SET requested_at = ? WHERE email = ? AND pending = 1 AND requested_at = ?'
+  ).bind(newRequestedAt, email, oldRequestedAt).run();
+  return r.meta.changes === 1;
+}
+
+export async function deletePhotoById(db, id) {
+  await deletePhotoRow_(db, id);
+}

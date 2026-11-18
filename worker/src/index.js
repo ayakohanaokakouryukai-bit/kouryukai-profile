@@ -1,4 +1,5 @@
 import { handleApi } from './api.js';
+import { handleAdmin } from './admin.js';
 import { getPhotoData } from './db.js';
 import { makeSendMail } from './mail.js';
 
@@ -44,6 +45,7 @@ export default {
     if (request.method === 'GET' && url.pathname.startsWith('/api/photo/')) {
       return servePhoto_(env, url.pathname.slice('/api/photo/'.length));
     }
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return handleAdmin(request, env, makeDeps_(env, ctx));
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return notFound_();
     return env.ASSETS.fetch(request);
   },
