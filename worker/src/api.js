@@ -106,21 +106,14 @@ async function requestLinkWork_(req, env, deps) {
   if (!row || row.pending || !canSendToday(row.lastSentDate, now)) return;
   if (!(await claimPending(env.DB, email, now.toISOString()))) return;
   const url = env.APP_BASE_URL + '/me.html#t=' + row.token;
-  let p;
-  try {
-    p = Promise.resolve(deps.sendMail({ email, url }));
-  } catch (err) {
-    p = Promise.reject(err);
-  }
-  deps.waitUntil(p.catch((err) => console.error('sendMail failed: ' + (err && err.message))));
+  await deps.sendMail({ email, url });
 }
 
+// Answers immediately and does all D1 work in the background, so response time never depends on
+// whether the email is an applicant.
 async function requestLink_(req, env, deps) {
-  try {
-    await requestLinkWork_(req, env, deps);
-  } catch (err) {
-    console.error('requestLink failed: ' + (err && err.message));
-  }
+  const work = requestLinkWork_(req, env, deps).catch((err) => console.error('requestLink failed: ' + (err && err.message)));
+  deps.waitUntil(work);
   return { ok: true };
 }
 

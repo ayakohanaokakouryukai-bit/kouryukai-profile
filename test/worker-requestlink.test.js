@@ -26,6 +26,7 @@ function mk(env, { sendMail, now = NOW } = {}) {
   };
   return { deps, sent, waits, call: (email) => handleApi({ action: 'requestLink', email }, env, deps) };
 }
+const settle = (t) => Promise.all(t.waits);
 const tokenCount = async (env) => (await env.DB.prepare('SELECT COUNT(*) AS n FROM tokens').first()).n;
 
 test('requestLink: unknown email -> ok, no token, no send', async () => {
@@ -33,8 +34,9 @@ test('requestLink: unknown email -> ok, no token, no send', async () => {
   const t = mk(env);
   assert.deepEqual(await t.call('zz@example.com'), { ok: true });
   assert.deepEqual(await t.call(''), { ok: true });
+  await settle(t);
   assert.equal(await tokenCount(env), 0);
-  assert.equal(t.waits.length, 0);
+  assert.equal(t.sent.length, 0);
 });
 
 test('requestLink: normalizes email, creates token, marks pending, sends once', async () => {
@@ -56,15 +58,18 @@ test('requestLink: while pending -> no second send; after markSent same JST day 
   const t = mk(env);
   await t.call('a@example.com');
   await t.call('a@example.com');
-  assert.equal(t.waits.length, 1);
+  await settle(t);
+  assert.equal(t.sent.length, 1);
   await markSent(env.DB, 'a@example.com', '2026-12-01');
   const row = await getTokenRowByEmail(env.DB, 'a@example.com');
   assert.deepEqual([row.pending, row.requestedAt, row.lastSentDate], [false, '', '2026-12-01']);
   await t.call('a@example.com');
-  assert.equal(t.waits.length, 1);
+  await settle(t);
+  assert.equal(t.sent.length, 1);
   const next = mk(env, { now: new Date('2026-12-01T15:00:00Z') }); // JST 12-02 00:00
   await next.call('a@example.com');
-  assert.equal(next.waits.length, 1);
+  await settle(next);
+  assert.equal(next.sent.length, 1);
   assert.equal(next.sent[0].url, 'https://app.example/me.html#t=' + 'f'.repeat(32)); // token reused
 });
 
@@ -72,16 +77,18 @@ test('requestLink: canceled applicant -> nothing', async () => {
   const env = await setup();
   const t = mk(env);
   assert.deepEqual(await t.call('c@example.com'), { ok: true });
+  await settle(t);
   assert.equal(await tokenCount(env), 0);
-  assert.equal(t.waits.length, 0);
+  assert.equal(t.sent.length, 0);
 });
 
 test('requestLink: expired -> nothing', async () => {
   const env = await setup();
   const t = mk(env, { now: new Date('2027-05-07T00:00:00+09:00') });
   await t.call('a@example.com');
+  await settle(t);
   assert.equal(await tokenCount(env), 0);
-  assert.equal(t.waits.length, 0);
+  assert.equal(t.sent.length, 0);
 });
 
 test('requestLink: sendMail throwing (sync or async) -> still ok, row stays pending', async () => {
@@ -99,6 +106,16 @@ test('requestLink: DB failure is swallowed -> ok', async () => {
   const t = mk(env);
   env.DB.prepare = () => { throw new Error('db down'); };
   assert.deepEqual(await t.call('a@example.com'), { ok: true });
+  await settle(t); // background failure must not reject
+});
+
+test('requestLink: responds before any D1 work finishes (no timing difference)', async () => {
+  const env = await setup();
+  const t = mk(env);
+  env.DB.prepare = () => ({ bind: () => ({ first: () => new Promise(() => {}), run: () => new Promise(() => {}) }) });
+  assert.deepEqual(await t.call('a@example.com'), { ok: true });
+  assert.deepEqual(await t.call('nobody@example.com'), { ok: true });
+  assert.equal(t.waits.length, 2); // the work is handed to waitUntil, still pending
 });
 
 async function pendingRow(env) {
