@@ -1,0 +1,12 @@
+{
+  "name": "kouryukai-profile-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply kouryukai-profile --remote"
+  },
+  "devDependencies": {
+    "wrangler": "4.164.0"
+  }
+}
