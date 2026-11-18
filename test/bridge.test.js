@@ -241,3 +241,34 @@ test('migrateFromOldTabs posts tokens and profiles (no staff) with photos', () =
   assert.equal(body.profiles[0].consent, true);
   assert.equal('staff' in body.profiles[0] || 'staff' in body.profiles[0].profile, false);
 });
+
+// ---- reset retry
+const RESET_SHEETS = () => ({ d1: { 'URL作り直し': [['メールアドレス', '結果'], ['a@x.com', '']], '写し_合鍵': [['h']], '写し_プロフィール': [['h']] }, f1: { シート1: [['メールアドレス', 'キャンセル']] } });
+
+test('timerEvery5Min processes a pending reset row', () => {
+  const env = makeEnv({ sheets: RESET_SHEETS(), fetchHandler: (url) => ({ code: 200, body: url.endsWith('/admin/export') ? '{"ok":true,"tokens":[],"profiles":[]}' : '{"ok":true,"found":true}' }) });
+  load(env).timerEvery5Min();
+  assert.equal(env.fetches.filter((f) => f.url.endsWith('/admin/reset-token')).length, 1);
+  assert.ok(env.writes.some((w) => w[0] === 'setValue' && w[4] === 2 && /^済 /.test(w[5])));
+});
+
+test('reset failure leaves B empty and writes a C note; later success fills B and clears C', () => {
+  let fail = true;
+  const env = makeEnv({ sheets: RESET_SHEETS(), fetchHandler: () => (fail ? { code: 500, body: 'x' } : { code: 200, body: '{"ok":true,"found":true}' }) });
+  const ctx = load(env);
+  ctx.processResets();
+  const sv = () => env.writes.filter((w) => w[0] === 'setValue');
+  assert.equal(sv().filter((w) => w[4] === 2).length, 0);
+  assert.match(sv().find((w) => w[4] === 3)[5], /^失敗（5分以内に自動で再試行します）/);
+  fail = false;
+  env.writes.length = 0;
+  ctx.processResets();
+  assert.match(sv().find((w) => w[4] === 2)[5], /^済 /);
+  assert.equal(sv().find((w) => w[4] === 3)[5], '');
+});
+
+test('timerEvery5Min: a failing step does not stop the others', () => {
+  const env = makeEnv({ sheets: RESET_SHEETS(), fetchHandler: (url) => { throw new Error('net'); } });
+  assert.doesNotThrow(() => load(env).timerEvery5Min());
+  assert.ok(env.fetches.length >= 3);
+});

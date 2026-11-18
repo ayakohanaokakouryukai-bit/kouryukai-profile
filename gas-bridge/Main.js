@@ -57,6 +57,7 @@ function onEditTrigger(e) {
 
 function timerEvery5Min() {
   try { pushApplicants(); } catch (err) { console.error('push failed: ' + (err && err.message)); }
+  try { processResets(); } catch (err) { console.error('processResets failed: ' + (err && err.message)); }
   try { mirror(); } catch (err) { console.error('mirror failed: ' + (err && err.message)); }
 }
 

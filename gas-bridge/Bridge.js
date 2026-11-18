@@ -167,9 +167,19 @@ function processResetsCore_(config) {
   if (!sheet) return;
   var rows = pendingResetRows(sheet.getDataRange().getValues());
   for (var i = 0; i < rows.length; i++) {
-    var r = workerCall_(config, 'post', '/admin/reset-token', { email: rows[i].email });
-    if (!callOk_(r)) continue; // leave B empty so it is retried on the next edit
+    var r = null;
+    try {
+      r = workerCall_(config, 'post', '/admin/reset-token', { email: rows[i].email });
+    } catch (err) {
+      console.error('reset-token failed: ' + (err && err.message));
+    }
+    if (!callOk_(r || { code: 0, json: null })) {
+      // Leave B empty so the row is retried by the 5-minute timer; show a visible note in C.
+      sheet.getRange(rows[i].row, 3, 1, 1).setValue(RESET_FAILURE_NOTE + ' ' + formatResult(true, new Date()).slice(2));
+      continue;
+    }
     sheet.getRange(rows[i].row, 2, 1, 1).setValue(formatResult(r.json.found === true, new Date()));
+    sheet.getRange(rows[i].row, 3, 1, 1).setValue('');
   }
 }
 

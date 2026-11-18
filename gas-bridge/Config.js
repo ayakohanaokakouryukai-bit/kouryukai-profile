@@ -36,3 +36,5 @@ function getConfig() {
   config.oldPhotoFolderId = folder ? String(folder).trim() : '';
   return config;
 }
+
+var RESET_FAILURE_NOTE = '失敗（5分以内に自動で再試行します）';
